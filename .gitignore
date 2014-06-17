@@ -7,9 +7,7 @@ h5py_read_test.py
 plot_kinvey_data.py
 single_measurement_analog.py
 test_battery.py
-tmp.hdf5
-tmp2.hdf5
-tmp3.hdf5
+*.hdf5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
