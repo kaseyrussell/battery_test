@@ -31,21 +31,32 @@ import datetime
 import numpy as np
 import time
 
-with h5py.File('testdata_BBMx.hdf5', 'r') as f:
-    time   = f['time'][:]
-    volts  = f['voltage'][:]
-    cycle  = f['cycle'][:]
-    dtype  = f['type'][:]
+files = [
+    "testdata_BBM04r8.hdf5",
+    "testdata_BBM05r8.hdf5",
+    "testdata_BBM06r8.hdf5",
+    "testdata_BBM07r8.hdf5",
+    "testdata_BBM08r8.hdf5",
+    ]
+for fname in files:
+    bname = fname.split("BBM")[-1].split(".")[0]
+    with h5py.File(fname, 'r') as f:
+        time   = f['time'][:]
+        volts  = f['voltage'][:]
+        cycle  = f['cycle'][:]
+        dtype  = f['type'][:]
 
-current_cycle = cycle[0]
-tlist, vlist = [], []
-for t,v,c in zip(time,volts,cycle):
-    if c != current_cycle and len(vlist)>0:
-        ax.plot(tlist, vlist, '-')
-        tlist, vlist = [], []
-    tlist.append(float(t)/3600.0)
-    vlist.append(v)
+    current_cycle = cycle[0]
+    tlist, vlist = [], []
+    for t,v,c in zip(time,volts,cycle):
+        if c != current_cycle and len(vlist)>0:
+            ax.plot(tlist, vlist, '-')
+            tlist, vlist = [], []
+        tlist.append(float(t)/3600.0)
+        vlist.append(v)
 
-ax.plot(tlist, vlist, '-')
+    ax.plot(tlist, vlist, '-', label=bname)
+
+ax.legend(loc=3)
 fig.show()
 fig.canvas.draw()
