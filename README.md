@@ -11,9 +11,10 @@ important that each battery has a protection circuit to prevent over charge and
 over discharge. This software does not protect against that.
 
 I don't have the hardware to individually charge/discharge multiple batteries 
-(only measure voltage individually), so I base the charge/discharge enpoints
+(only measure voltage individually), so I base the charge/discharge endpoints
 on the least charged / most charged battery (respectively). I am assuming that
-the protection circuit on each battery will protect the outliers. 
+the protection circuit on each battery will protect the ones that charge or
+discharge faster. 
 
 This software uses the Labjack U12 multifunction DAQ with USB:
 http://labjack.com/u12
