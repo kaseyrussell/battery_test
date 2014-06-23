@@ -34,18 +34,21 @@ class BatteryTest(object):
         labjack    : labjack.Labjack instance
         battery_id : (string) battery id; this will be the name of the hdf5 output file of test data
     Optional parameters:
+            (these default voltages are not accurate; it's just what the LabJack thinks it is outputting)
         ljport_Vbatt        : default 0
         ljport_Isrc_monitor : default 1
-        sink_params         : default dict( Von=2.23, Voff=0.0, ljport=0 ) # gives 3 mA, 0.2 C current on my setup
+        sink_params         : default dict( Von=0.76, Voff=0.0, ljport=0 ) # gives 3 mA, 0.2 C current on my setup
         source_params       : default dict( Von=4.08, Voff=5.0, Vcutoff=4.30, ljport=1 ) # gives ~7 mA, 0.5 C current on my setup
         battery_limits      : default dict(Vmin=2.9, Vmax=4.2)             # Li-poly
         sample_interval     : default 10 seconds
+        pulse_params        : default dict( Vsink=1.3, sample_interval=5.0, pulse_duration=30.0 ) # gives ~15 mA, 1C 
     """
     def __init__(self, labjack, battery_id="noname", ljport_Vbatt=0, ljport_Isrc_monitor=1,
-            sink_params  =dict( Von=2.23, Voff=0.0, ljport=0 ),
+            sink_params  =dict( Von=0.76, Voff=0.0, ljport=0 ),
             source_params=dict( Von=4.08, Voff=5.0, Vcutoff=4.30, ljport=1 ),
             battery_limits=dict(Vmin=2.9, Vmax=4.2, num_cycles=300),
-            sample_interval=30.0
+            sample_interval=30.0,
+            pulse_params=dict( Vsink=1.3, sample_interval=10.0, pulse_duration=30.0 )
             ):
         assert type(labjack)       == Labjack
 
@@ -75,7 +78,9 @@ class BatteryTest(object):
         self.test_time             = [0.0]
         self.test_voltage          = [self.get_voltage()]
 
-
+        self.sink_v_pulse          = pulse_params['Vsink']
+        self.pulse_duration        = pulse_params['pulse_duration']
+        self.sample_interval_pulse = pulse_params['sample_interval']
 
     def constant_current(self):
         while self.get_voltage() < self.voltage_max:
@@ -96,9 +101,10 @@ class BatteryTest(object):
         """ Turn both sink and source off. """
         self._set_voltages(self.sink_v_off, self.source_v_off)
 
-    def sink_on(self):
+    def sink_on(self, pulse=False):
         """ Turn the current sink on and source off. """
-        self._set_voltages(self.sink_v_on, self.source_v_off)
+        sink_v = self.sink_v_on if not pulse else self.sink_v_pulse
+        self._set_voltages(sink_v, self.source_v_off)
 
     def source_on(self, reset=True):
         """ Turn the current source on and sink off. """
@@ -123,18 +129,40 @@ class BatteryTest(object):
             self.source_reduce()
             self.constant_current()
 
-    def discharge(self):
-        """ Discharge the battery using a NPN current sink. """
+    def discharge(self, pulse=False):
+        """ Discharge the battery using a NPN current sink. 
+        If pulse is True, pulse the current to a higher value (self.sink_v_pulse)
+        for time self.pulse_duration (50 percent duty cycle),
+        with sampling interval self.sample_interval_pulse during the pulse
+        """
         self.sink_on()
+        time_pulse = time.time()
+        pulse_is_on   = False
         while self.get_voltage() > self.voltage_min:
             dt = time.time()-self.test_start_time
             v  = self.get_voltage()
             self.test_time.append(dt)
             self.test_voltage.append(v)
 
-            self.save("discharging")
             print "discharging, battery voltage is: {0}".format(v)
-            time.sleep(self.sample_interval)
+            if pulse_is_on:
+                self.save("discharging-pulsed")
+            else:
+                self.save("discharging")
+
+            if pulse:
+                if time.time() - time_pulse > self.pulse_duration:
+                    time_pulse = time.time()
+                    if pulse_is_on:
+                        self.sink_on( pulse=False )
+                        pulse_is_on = False
+                    else:
+                        self.sink_on( pulse=True )
+                        pulse_is_on = True
+                sleep_time = self.sample_interval_pulse if pulse_is_on else self.sample_interval
+                time.sleep(sleep_time)
+            else:
+                time.sleep(self.sample_interval)
 
     def get_voltage(self):
         return self.labjack.get_v(self.ljport_Vbatt)
@@ -177,9 +205,11 @@ class BatteryTest(object):
         self.init_file()
 
         for i in range(self.max_cycles):
-            self.charge()
+            pulse = True if i%2 == 0 else False # pulse on every other cycle, starting on first.
+            print "pulse flag is set to {0}".format(pulse)
+            self.discharge( pulse=pulse )
             self.off()
-            self.discharge()
+            self.charge()
             self.off()
             self.cycle += 1
             print "Done with cycle."
@@ -198,13 +228,13 @@ class MUXTest(BatteryTest):
         ljports : default dict(A0=0, A1=1, A2=2, A3=3), dictionary associatng the 
             address inputs of the MUX (A0-A3) with the IO ports of the LabJack.
     """
-    def __init__(self, labjack, battery_list, ljports=dict(A0=0, A1=1, A2=2, A3=3)):
+    def __init__(self, labjack, battery_list, ljports=dict(A0=0, A1=1, A2=2, A3=3), **kwargs):
         self.labjack   = labjack
         self.batteries = battery_list
         self.ljports   = ljports
         self.dt        = 0.0
         self.make_tests()
-        super(MUXTest, self).__init__(self.labjack)
+        super(MUXTest, self).__init__(self.labjack, **kwargs)
 
     def make_tests(self):
         """ Make a separate test for each battery, but we won't run them
@@ -293,14 +323,38 @@ class MUXTest(BatteryTest):
             self.source_reduce()
             self.constant_current()
 
-    def discharge(self):
-        """ Discharge the battery using a NPN current sink. """
+    def discharge(self, pulse=False):
+        """ Discharge the battery using a NPN current sink. 
+        If pulse is True, pulse the current to a higher value (self.sink_v_pulse)
+        for time self.pulse_duration (50 percent duty cycle),
+        with sampling interval self.sample_interval_pulse during the pulse
+        """
         self.sink_on()
+        time_pulse = time.time()
+        pulse_is_on   = False
         while self.get_voltage_most_charged() > self.voltage_min:
             self.dt = time.time()-self.test_start_time
             self.measure_all_batteries()
-            self.save("discharging")
-            time.sleep(self.sample_interval)
+            if pulse_is_on:
+                self.save("discharging-pulsed")
+                print "PULSING."
+            else:
+                self.save("discharging")
+                print "NOT PULSING"
+
+            if pulse:
+                if time.time() - time_pulse > self.pulse_duration:
+                    time_pulse = time.time()
+                    if pulse_is_on:
+                        self.sink_on( pulse=False )
+                        pulse_is_on = False
+                    else:
+                        self.sink_on( pulse=True )
+                        pulse_is_on = True
+                sleep_time = self.sample_interval_pulse if pulse_is_on else self.sample_interval
+                time.sleep(sleep_time)
+            else:
+                time.sleep(self.sample_interval)
 
 
 if __name__ == "__main__":

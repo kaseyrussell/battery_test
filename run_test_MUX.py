@@ -10,16 +10,16 @@ import labjack
 
 # list the battery names and their respective MUX output ports (Y0 is denoted 0)
 batteries = [
-    dict( id="BBM04r8", mux=0 ),
-    dict( id="BBM05r8", mux=1 ),
-    dict( id="BBM06r8", mux=2 ),
-    dict( id="BBM07r8", mux=3 ),
-    dict( id="BBM08r8", mux=4 ),
+    dict( id="BBM09_pulsed", mux=0 ),
+    dict( id="BBM10_pulsed", mux=1 ),
+    dict( id="BBM11_pulsed", mux=2 ),
+    dict( id="BBM12_pulsed", mux=3 ),
+    dict( id="BBM13_pulsed", mux=4 ),
     ]
 
 d   = labjack.Labjack()
 
-mx = labjack.MUXTest(d, batteries)
+mx = labjack.MUXTest(d, batteries, sample_interval=10.0)
 mx.run_test()
 
 d.close()

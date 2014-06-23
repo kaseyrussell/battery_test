@@ -8,6 +8,8 @@ h5py_read_test.py
 plot_kinvey_data.py
 single_measurement_analog.py
 test_battery.py
+plot_BBM04thru08_pulsed.py
+plot_BBM09thru13_pulsed.py
 *.hdf5
 
 # Byte-compiled / optimized / DLL files
